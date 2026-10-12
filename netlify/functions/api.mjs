@@ -71,8 +71,15 @@ const newId = () => Date.now().toString(36).slice(-5) + Math.random().toString(3
 const prixOk = v => Math.round(Math.max(0, Math.min(999, Number(String(v).replace(",", ".")) || 0)) * 100) / 100;
 
 function codeAttendu() {
-  try { if (globalThis.Netlify?.env?.get) return globalThis.Netlify.env.get("SANDRINE_CODE") || ""; } catch (e) {}
-  return process.env.SANDRINE_CODE || "";
+  // Accepte SANDRINE_CODE ou sandrine_code (comme réglé dans Netlify)
+  const noms = ["SANDRINE_CODE", "sandrine_code", "Sandrine_code"];
+  for (const n of noms) {
+    let v = "";
+    try { if (globalThis.Netlify?.env?.get) v = globalThis.Netlify.env.get(n) || ""; } catch (e) {}
+    v = v || process.env[n] || "";
+    if (v.trim()) return v.trim();
+  }
+  return "";
 }
 async function estSandrine(req) {
   const attendu = codeAttendu();
