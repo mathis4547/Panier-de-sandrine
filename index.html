@@ -494,7 +494,7 @@ function renderClient(){
           <div class="eyebrow">Maraîchage · Fauillet, Lot-et-Garonne</div>
           <h1>Les Paniers de Sandrine</h1>
           <p class="lead">Des légumes de saison cueillis à la ferme. Composez votre panier légume par légume : Sandrine le prépare, vous le récupérez et vous payez sur place.</p>
-          ${DEMO?`<p class="demo"><b>Démonstration.</b> Les commandes de cette page restent dans ce navigateur. <a href="#sandrine">Ouvrir l'Espace Sandrine</a> avec le code <b>1234</b>. Sur le vrai site, aucun lien n'apparaît : seule Sandrine connaît l'adresse.</p>`:""}
+          ${DEMO?`<p class="demo"><b>Démonstration.</b> Les commandes de cette page restent dans ce navigateur. <a href="#sandrine">Ouvrir l'Espace Sandrine</a> avec le code <b>1234</b>. Sur le vrai site, aucun lien n'apparaît : Sandrine a sa propre adresse (/sandrine).</p>`:""}
         </div>
         ${CRATE}
       </div>
@@ -628,7 +628,7 @@ function renderLogin(msg){
         <div class="err" id="err" role="alert">${esc(msg||"")}</div>
         <button class="btn main big" type="submit">Entrer</button>
         ${DEMO?`<p class="demo" style="margin:0">Démonstration : le code est <b>1234</b>.</p>`:""}
-        <a href="#" style="text-align:center">← Retour à la page de commande</a>
+        ${DEMO?`<a href="#" style="text-align:center">← Retour à la page de commande (démo)</a>`:""}
       </form>
     </div>
   </div>`;
@@ -665,10 +665,10 @@ function renderAdmin(){
     </div>
     <div id="retrait-box"></div>
     <div id="admin-view"></div>
-    <footer><a href="#">Voir la page des clients</a><button class="btn sm ghost" id="logout" type="button">Se déconnecter</button></footer>
+    <footer><a href="${DEMO?"#":"/"}" target="${DEMO?"_self":"_blank"}">Voir la page des clients</a><button class="btn sm ghost" id="logout" type="button">Se déconnecter</button></footer>
   </div>`;
   app.querySelectorAll("[data-t]").forEach(b=>b.addEventListener("click",()=>{ adminTab=b.dataset.t; renderAdmin(); }));
-  $("#logout").addEventListener("click",()=>{ store.del("ps-code"); CODE=null; clearInterval(pollTimer); location.hash=""; });
+  $("#logout").addEventListener("click",()=>{ store.del("ps-code"); CODE=null; clearInterval(pollTimer); renderLogin(); });
   renderRetraitBox();
   if(adminTab==="commandes"){ renderCommandes(); chargerCommandes(); } else renderReglages();
   clearInterval(pollTimer);
@@ -967,8 +967,10 @@ function modal(html,onMount){
 }
 
 /* ================= Navigation ================= */
+const estPageSandrine = () => /\/sandrine\/?$/.test(location.pathname) || (DEMO && location.hash==="#sandrine");
 async function route(){
-  if(location.hash==="#sandrine"){
+  if(estPageSandrine()){
+    document.title="Espace Sandrine";
     if(!CODE){ const saved=store.get("ps-code"); if(saved){ try{ await API.login(saved); CODE=saved; }catch(e){ store.del("ps-code"); } } }
     return CODE ? renderAdmin() : renderLogin();
   }
@@ -981,9 +983,16 @@ async function start(){
     const r=await fetch("/api/infos",{headers:{accept:"application/json"}});
     if(!r.ok||!(r.headers.get("content-type")||"").includes("json")) throw new Error("demo");
     INFOS=await r.json();
-  }catch(e){ DEMO=true; INFOS=await API.infos(); }
+  }catch(e){
+    // Sur le vrai site (Netlify), jamais de mode démo : on affiche un message clair.
+    if(/netlify\.app$/.test(location.hostname)){
+      app.innerHTML=`<div class="wrap"><div class="closed" style="margin-top:40px"><h2>Site en cours de mise à jour</h2><p>Les commandes reviennent dans une minute. Rechargez la page.</p></div></div>`;
+      return;
+    }
+    DEMO=true; INFOS=await API.infos();
+  }
   window.addEventListener("hashchange",route);
-  document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&CODE&&location.hash==="#sandrine"&&adminTab==="commandes") chargerCommandes(true); });
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&CODE&&estPageSandrine()&&adminTab==="commandes") chargerCommandes(true); });
   route();
 }
 start();

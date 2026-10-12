@@ -1,0 +1,10 @@
+{
+  "name": "paniers-sandrine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Commandes de paniers de légumes — Les Paniers de Sandrine, Fauillet",
+  "type": "module",
+  "dependencies": {
+    "@netlify/blobs": "11.1.1"
+  }
+}

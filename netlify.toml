@@ -1,0 +1,23 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Page de Sandrine : même fichier, adresse séparée (jamais affichée aux clients)
+[[redirects]]
+  from = "/sandrine"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/sandrine/"
+  to = "/index.html"
+  status = 200
+
+# La page de Sandrine n'est pas référencée par Google
+[[headers]]
+  for = "/sandrine"
+  [headers.values]
+    X-Robots-Tag = "noindex"
