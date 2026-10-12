@@ -426,6 +426,8 @@ const API={
     commande.retrait=admin&&body.retrait?body.retrait:db.settings.retrait.date; commande.horaires=db.settings.retrait.horaires;
     db.commandes.push(commande); store.set("ps-demo-db-v3",db); return {commande};
   },
+  async acces(){ if(DEMO) return {configure:true}; return call("GET","/api/acces"); },
+  async creerCode(code){ return call("POST","/api/acces",{code}); },
   async login(code){
     if(DEMO){ if(code!==DEMO_CODE) throw new Error("Code incorrect."); return {ok:true}; }
     CODE=code; try{ return await call("POST","/api/login",{}); }catch(e){ CODE=null; throw e; }
@@ -615,6 +617,35 @@ function renderMerci(c){
 
 /* ================= Espace Sandrine ================= */
 let adminTab="commandes", vue=null, dates=[], filtre="toutes", commandes=[], pollTimer=null;
+
+function renderCreation(){
+  app.innerHTML = `
+  <div class="wrap">
+    <div class="card login">
+      <h1>Bienvenue Sandrine</h1>
+      <p class="muted">Première ouverture : choisissez votre code personnel. Vous le taperez pour voir vos commandes et changer vos prix.</p>
+      <form id="f-new" novalidate style="display:flex;flex-direction:column;gap:12px;margin-top:16px">
+        <label class="field"><span>Votre code (4 à 8 chiffres)</span><input type="password" id="n-code" class="code-in" inputmode="numeric" maxlength="8" autocomplete="new-password"></label>
+        <label class="field"><span>Retapez le code</span><input type="password" id="n-code2" class="code-in" inputmode="numeric" maxlength="8" autocomplete="new-password"></label>
+        <div class="err" id="err" role="alert"></div>
+        <button class="btn main big" type="submit">Créer mon code</button>
+        <p class="muted" style="font-size:.9rem;margin:0">Notez-le dans un endroit sûr. Évitez 1234 ou votre date de naissance.</p>
+      </form>
+    </div>
+  </div>`;
+  setTimeout(()=>$("#n-code").focus(),30);
+  $("#f-new").addEventListener("submit",async ev=>{
+    ev.preventDefault();
+    const c1=$("#n-code").value.trim(), c2=$("#n-code2").value.trim(), err=$("#err");
+    if(!/^\d{4,8}$/.test(c1)) return err.textContent="Le code doit faire 4 à 8 chiffres.";
+    if(/^(\d)\1+$/.test(c1)||"0123456789".includes(c1)) return err.textContent="Code trop facile à deviner, choisissez-en un autre.";
+    if(c1!==c2) return err.textContent="Les deux codes ne sont pas identiques.";
+    try{
+      await API.creerCode(c1); await API.login(c1); CODE=c1; store.set("ps-code",c1);
+      renderAdmin(); toast("Code créé. Bienvenue !");
+    }catch(x){ err.textContent=x.message; if(/existe déjà/.test(x.message)) setTimeout(()=>renderLogin(),1500); }
+  });
+}
 
 function renderLogin(msg){
   app.innerHTML = `
@@ -972,7 +1003,9 @@ async function route(){
   if(estPageSandrine()){
     document.title="Espace Sandrine";
     if(!CODE){ const saved=store.get("ps-code"); if(saved){ try{ await API.login(saved); CODE=saved; }catch(e){ store.del("ps-code"); } } }
-    return CODE ? renderAdmin() : renderLogin();
+    if(CODE) return renderAdmin();
+    if(!DEMO){ try{ const a=await API.acces(); if(!a.configure) return renderCreation(); }catch(e){} }
+    return renderLogin();
   }
   clearInterval(pollTimer);
   try{ INFOS=await API.infos(); }catch(e){}

@@ -11,6 +11,7 @@
 // Le code de Sandrine se règle dans Netlify : variable d'environnement SANDRINE_CODE.
 
 import { getStore } from "@netlify/blobs";
+import { createHash, randomBytes } from "node:crypto";
 
 const UNITES = {
   kg: { pas: 0.5 }, piece: { pas: 1 }, botte: { pas: 1 }, sachet: { pas: 1 }, barquette: { pas: 1 }
@@ -70,10 +71,10 @@ const clean = (s, max) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, m
 const newId = () => Date.now().toString(36).slice(-5) + Math.random().toString(36).slice(2, 6);
 const prixOk = v => Math.round(Math.max(0, Math.min(999, Number(String(v).replace(",", ".")) || 0)) * 100) / 100;
 
-function codeAttendu() {
-  // Accepte SANDRINE_CODE ou sandrine_code (comme réglé dans Netlify)
-  const noms = ["SANDRINE_CODE", "sandrine_code", "Sandrine_code"];
-  for (const n of noms) {
+// Code de Sandrine : créé par elle-même sur /sandrine (stocké chiffré dans Netlify Blobs).
+// Une variable Netlify SANDRINE_CODE, si elle existe, reste prioritaire.
+function codeEnv() {
+  for (const n of ["SANDRINE_CODE", "sandrine_code"]) {
     let v = "";
     try { if (globalThis.Netlify?.env?.get) v = globalThis.Netlify.env.get(n) || ""; } catch (e) {}
     v = v || process.env[n] || "";
@@ -81,9 +82,19 @@ function codeAttendu() {
   }
   return "";
 }
-async function estSandrine(req) {
-  const attendu = codeAttendu();
-  const ok = !!attendu && req.headers.get("x-code") === attendu;
+const sha = s => createHash("sha256").update(s).digest("hex");
+async function codeConfigure(store) {
+  return !!codeEnv() || !!(await store.get("acces", { type: "json" }));
+}
+async function estSandrine(req, store) {
+  const code = req.headers.get("x-code") || "";
+  let ok = false;
+  const env = codeEnv();
+  if (env) ok = code === env;
+  else {
+    const a = await store.get("acces", { type: "json" });
+    ok = !!a && !!code && sha(a.salt + "|" + code) === a.hash;
+  }
   if (!ok) await new Promise(r => setTimeout(r, 700));
   return ok;
 }
@@ -152,7 +163,7 @@ export default async (req) => {
         return json({ reglages, etat: etat(reglages) });
       }
       if (req.method === "PUT") {
-        if (!(await estSandrine(req))) return json({ erreur: "Code incorrect." }, 401);
+        if (!(await estSandrine(req, store))) return json({ erreur: "Code incorrect." }, 401);
         const a = await lireReglages(store);
         const n = { ...a };
         if (typeof body?.ouvert === "boolean") n.ouvert = body.ouvert;
@@ -188,15 +199,27 @@ export default async (req) => {
       }
     }
 
+    if (route === "/api/acces") {
+      if (req.method === "GET") return json({ configure: await codeConfigure(store) });
+      if (req.method === "POST") {
+        if (await codeConfigure(store)) return json({ erreur: "Le code de Sandrine existe déjà." }, 409);
+        const code = String(body?.code || "");
+        if (!/^\d{4,8}$/.test(code)) return json({ erreur: "Le code doit faire 4 à 8 chiffres." }, 400);
+        const salt = randomBytes(16).toString("hex");
+        await store.setJSON("acces", { salt, hash: sha(salt + "|" + code), creeLe: new Date().toISOString() });
+        return json({ ok: true });
+      }
+    }
+
     if (route === "/api/login" && req.method === "POST") {
-      if (!codeAttendu()) return json({ erreur: "Le code n'est pas encore réglé dans Netlify (variable SANDRINE_CODE)." }, 500);
-      return (await estSandrine(req)) ? json({ ok: true }) : json({ erreur: "Code incorrect." }, 401);
+      if (!(await codeConfigure(store))) return json({ erreur: "Aucun code n'a encore été créé.", aCreer: true }, 409);
+      return (await estSandrine(req, store)) ? json({ ok: true }) : json({ erreur: "Code incorrect." }, 401);
     }
 
     if (route === "/api/commandes") {
       if (req.method === "POST") {
         const avecCode = !!req.headers.get("x-code");
-        const admin = avecCode ? await estSandrine(req) : false;
+        const admin = avecCode ? await estSandrine(req, store) : false;
         if (avecCode && !admin) return json({ erreur: "Code incorrect." }, 401);
         if (!admin && body?.site_web) return json({ ok: true, commande: { id: "x" } }); // piège à robots
         const reglages = await lireReglages(store);
@@ -209,7 +232,7 @@ export default async (req) => {
         return json({ ok: true, commande });
       }
 
-      if (!(await estSandrine(req))) return json({ erreur: "Code incorrect." }, 401);
+      if (!(await estSandrine(req, store))) return json({ erreur: "Code incorrect." }, 401);
 
       if (req.method === "GET") {
         const reglages = await lireReglages(store);
@@ -244,4 +267,4 @@ export default async (req) => {
   }
 };
 
-export const config = { path: ["/api/infos", "/api/login", "/api/commandes"] };
+export const config = { path: ["/api/infos", "/api/login", "/api/acces", "/api/commandes"] };

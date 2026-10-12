@@ -9,11 +9,8 @@ Commandes de paniers de légumes en ligne — maraîchage à Fauillet (47).
 
 1. Sur GitHub, créer un dépôt `paniers-sandrine`, puis **Add file → Upload files** et déposer TOUT le contenu de ce dossier (y compris le dossier `netlify/`). **Commit changes**.
 2. Sur Netlify : **Add new site → Import an existing project → GitHub** → choisir `paniers-sandrine` → **Deploy** (laisser les réglages par défaut, `netlify.toml` s'occupe de tout).
-3. Dans Netlify : **Site configuration → Environment variables → Add a variable**
-   - Key : `SANDRINE_CODE`
-   - Value : le code de Sandrine (ex. 6 chiffres, pas 1234)
-4. **Deploys → Trigger deploy → Deploy site** pour que le code soit pris en compte.
-5. **Site configuration → Change site name** → `paniers-sandrine`.
+3. Ouvrir tout de suite `https://VOTRE-SITE.netlify.app/sandrine` : à la première ouverture, Sandrine **crée son code** (4 à 8 chiffres). Il est enregistré chiffré, rien à régler dans Netlify.
+4. **Site configuration → Change site name** → `paniers-sandrine`.
 
 Les commandes sont stockées dans **Netlify Blobs** (inclus, rien à configurer).
 
